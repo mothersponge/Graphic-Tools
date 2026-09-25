@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dense Wave Halftone Generator</title>
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --line-color: #000000;
+            --panel-bg: rgba(245, 245, 245, 0.9);
+            --accent: #2563eb;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--line-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 4px; }
+        p { font-size: 0.9rem; color: #666; }
+        
+        .container {
+            width: 100%;
+            max-width: 950px;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+        @media(min-width: 768px) {
+            .container { grid-template-columns: 320px 1fr; }
+        }
+
+        .controls-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            max-height: 88vh;
+            overflow-y: auto;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .control-group label {
+            font-size: 0.82rem;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+        }
+        .control-group label span { color: #666; font-weight: normal; }
+        
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent);
+        }
+        input[type="file"] { display: none; }
+
+        .btn {
+            background: var(--line-color);
+            color: var(--bg-color);
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            text-align: center;
+            transition: opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.9; }
+        .btn-outline {
+            background: transparent;
+            color: var(--line-color);
+            border: 1px solid var(--line-color);
+        }
+
+        .preview-container {
+            background: #fff;
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            min-height: 400px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        canvas {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .color-row {
+            display: flex;
+            gap: 10px;
+        }
+        .color-row > div {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 0.75rem;
+        }
+        input[type="color"] {
+            width: 100%;
+            height: 36px;
+            border: 1px solid rgba(0,0,0,0.2);
+            border-radius: 6px;
+            background: none;
+            cursor: pointer;
+        }
+        
+        .loading {
+            position: absolute;
+            background: rgba(255,255,255,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            inset: 0;
+            font-weight: 600;
+            font-size: 0.9rem;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        .loading.active { opacity: 1; pointer-events: auto; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Dense Wave Op-Art Generator</h1>
+        <p>Flat lines in highlights, compressed waves in shadows</p>
+    </header>
+
+    <div class="container">
+        <!-- Controls Panel -->
+        <div class="controls-panel">
+            <label for="imageUpload" class="btn">Upload Image</label>
+            <input type="file" id="imageUpload" accept="image/*">
+
+            <div class="control-group">
+                <label>Line Spacing <span id="val-spacing">10</span></label>
+                <input type="range" id="spacing" min="6" max="25" value="10">
+            </div>
+
+            <div class="control-group">
+                <label>Wave Amplitude <span id="val-amplitude">6</span></label>
+                <input type="range" id="amplitude" min="1" max="20" value="6" step="0.5">
+            </div>
+
+            <div class="control-group">
+                <label>Wave Frequency <span id="val-frequency">0.25</span></label>
+                <input type="range" id="frequency" min="0.05" max="0.6" value="0.25" step="0.01">
+            </div>
+
+            <div class="control-group">
+                <label>Contrast / Threshold <span id="val-contrast">1.5</span></label>
+                <input type="range" id="contrast" min="0.5" max="3.0" value="1.5" step="0.1">
+            </div>
+
+            <div class="color-row">
+                <div>
+                    <label>Background</label>
+                    <input type="color" id="bgColor" value="#ffffff">
+                </div>
+                <div>
+                    <label>Lines</label>
+                    <input type="color" id="lineColor" value="#000000">
+                </div>
+            </div>
+
+            <button class="btn btn-outline" id="btnInvert">Invert Tone</button>
+            
+            <hr style="border:0; border-top:1px solid rgba(0,0,0,0.1); margin: 2px 0;">
+
+            <button class="btn" id="btnDownloadPNG">Download PNG</button>
+            <button class="btn btn-outline" id="btnDownloadSVG">Download Vector SVG</button>
+        </div>
+
+        <!-- Preview Panel -->
+        <div class="preview-container">
+            <div class="loading" id="loadingIndicator">Generating waves...</div>
+            <canvas id="canvas"></canvas>
+        </div>
+    </div>
+
+    <canvas id="processCanvas" style="display:none;"></canvas>
+
+    <script>
+        const imageUpload = document.getElementById('imageUpload');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const processCanvas = document.getElementById('processCanvas');
+        const pCtx = processCanvas.getContext('2d');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+
+        // Inputs
+        const spacingRange = document.getElementById('spacing');
+        const amplitudeRange = document.getElementById('amplitude');
+        const frequencyRange = document.getElementById('frequency');
+        const contrastRange = document.getElementById('contrast');
+        const bgColorInput = document.getElementById('bgColor');
+        const lineColorInput = document.getElementById('lineColor');
+        const btnInvert = document.getElementById('btnInvert');
+        const btnDownloadPNG = document.getElementById('btnDownloadPNG');
+        const btnDownloadSVG = document.getElementById('btnDownloadSVG');
+
+        // Labels
+        const valSpacing = document.getElementById('val-spacing');
+        const valAmplitude = document.getElementById('val-amplitude');
+        const valFrequency = document.getElementById('val-frequency');
+        const valContrast = document.getElementById('val-contrast');
+
+        let currentImage = new Image();
+        let isInverted = false;
+        let imgLoaded = false;
+
+        function loadDefaultImage() {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = 400;
+            tempCanvas.height = 500;
+            const tCtx = tempCanvas.getContext('2d');
+            
+            const grad = tCtx.createRadialGradient(200, 200, 20, 200, 200, 220);
+            grad.addColorStop(0, '#ffffff');
+            grad.addColorStop(0.5, '#777777');
+            grad.addColorStop(1, '#000000');
+            tCtx.fillStyle = grad;
+            tCtx.fillRect(0, 0, 400, 500);
+
+            tCtx.fillStyle = '#000';
+            tCtx.beginPath();
+            tCtx.arc(150, 180, 25, 0, Math.PI * 2);
+            tCtx.arc(250, 180, 25, 0, Math.PI * 2);
+            tCtx.fill();
+
+            currentImage.src = tempCanvas.toDataURL();
+            currentImage.onload = () => {
+                imgLoaded = true;
+                generateHalftone();
+            };
+        }
+
+        imageUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            loadingIndicator.classList.add('active');
+            reader.onload = (event) => {
+                currentImage.src = event.target.result;
+                currentImage.onload = () => {
+                    imgLoaded = true;
+                    generateHalftone();
+                    loadingIndicator.classList.remove('active');
+                };
+            };
+            reader.readAsDataURL(file);
+        });
+
+        const inputs = [spacingRange, amplitudeRange, frequencyRange, contrastRange, bgColorInput, lineColorInput];
+        inputs.forEach(input => {
+            input.addEventListener('input', () => {
+                updateLabels();
+                if (imgLoaded) generateHalftone();
+            });
+        });
+
+        btnInvert.addEventListener('click', () => {
+            isInverted = !isInverted;
+            btnInvert.style.background = isInverted ? 'var(--line-color)' : 'transparent';
+            btnInvert.style.color = isInverted ? 'var(--bg-color)' : 'var(--line-color)';
+            if (imgLoaded) generateHalftone();
+        });
+
+        function updateLabels() {
+            valSpacing.textContent = spacingRange.value;
+            valAmplitude.textContent = amplitudeRange.value;
+            valFrequency.textContent = frequencyRange.value;
+            valContrast.textContent = contrastRange.value;
+        }
+
+        function getSettings() {
+            return {
+                spacing: parseInt(spacingRange.value),
+                amplitude: parseFloat(amplitudeRange.value),
+                frequency: parseFloat(frequencyRange.value),
+                contrast: parseFloat(contrastRange.value),
+                bgColor: bgColorInput.value,
+                lineColor: lineColorInput.value
+            };
+        }
+
+        function generateHalftone() {
+            if (!imgLoaded) return;
+            const s = getSettings();
+
+            const maxWidth = 600;
+            let w = currentImage.width;
+            let h = currentImage.height;
+            if (w > maxWidth) {
+                h = Math.round((maxWidth / w) * h);
+                w = maxWidth;
+            }
+
+            processCanvas.width = w;
+            processCanvas.height = h;
+            pCtx.drawImage(currentImage, 0, 0, w, h);
+            const imgData = pCtx.getImageData(0, 0, w, h);
+            const data = imgData.data;
+
+            canvas.width = w;
+            canvas.height = h;
+
+            ctx.fillStyle = s.bgColor;
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.strokeStyle = s.lineColor;
+            ctx.lineWidth = 1.2;
+            ctx.lineCap = 'round';
+
+            const rows = Math.floor(h / s.spacing);
+
+            for (let r = 0; r < rows; r++) {
+                let yBase = r * s.spacing + s.spacing / 2;
+                ctx.beginPath();
+
+                let isDrawing = false;
+                for (let x = 0; x < w; x++) {
+                    const idx = (Math.floor(yBase) * w + x) * 4;
+                    let lum = (0.299 * data[idx] + 0.587 * data[idx+1] + 0.114 * data[idx+2]) / 255;
+                    
+                    lum = (lum - 0.5) * s.contrast + 0.5;
+                    lum = Math.max(0, Math.min(1, lum));
+                    if (isInverted) lum = 1 - lum;
+
+                    // Darkness drives wave amplitude (highlights = 0 amp / flat line, shadows = high waves)
+                    let darkness = 1 - lum;
+                    let wave = Math.sin(x * s.frequency) * s.amplitude * darkness;
+                    let y = yBase + wave;
+
+                    if (x === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                ctx.stroke();
+            }
+        }
+
+        // PNG Export
+        btnDownloadPNG.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'dense-wave-art.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        });
+
+        // Vector SVG Export
+        btnDownloadSVG.addEventListener('click', () => {
+            if (!imgLoaded) return;
+            const s = getSettings();
+            const w = canvas.width;
+            const h = canvas.height;
+            const imgData = pCtx.getImageData(0, 0, w, h);
+            const data = imgData.data;
+
+            let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">\n`;
+            svg += `  <rect width="100%" height="100%" fill="${s.bgColor}"/>\n`;
+
+            const rows = Math.floor(h / s.spacing);
+
+            for (let r = 0; r < rows; r++) {
+                let yBase = r * s.spacing + s.spacing / 2;
+                let d = "";
+
+                for (let x = 0; x < w; x++) {
+                    const idx = (Math.floor(yBase) * w + x) * 4;
+                    let lum = (0.299 * data[idx] + 0.587 * data[idx+1] + 0.114 * data[idx+2]) / 255;
+                    
+                    lum = (lum - 0.5) * s.contrast + 0.5;
+                    lum = Math.max(0, Math.min(1, lum));
+                    if (isInverted) lum = 1 - lum;
+
+                    let darkness = 1 - lum;
+                    let wave = Math.sin(x * s.frequency) * s.amplitude * darkness;
+                    let y = yBase + wave;
+
+                    if (x === 0) {
+                        d += `M ${x} ${y.toFixed(2)}`;
+                    } else {
+                        d += ` L ${x} ${y.toFixed(2)}`;
+                    }
+                }
+                svg += `  <path d="${d}" stroke="${s.lineColor}" stroke-width="1.2" fill="none"/>\n`;
+            }
+
+            svg += `</svg>`;
+
+            const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'dense-wave-art.svg';
+            link.click();
+            URL.revokeObjectURL(url);
+        });
+
+        loadDefaultImage();
+    </script>
+</body>
+</html>
